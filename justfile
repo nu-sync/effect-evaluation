@@ -1,4 +1,4 @@
-# effect-systemone — an Effect client for TypeSafe AI System One models (Jev)
+# effect-evaluation — an Effect client for TypeSafe AI System One models (Jev)
 
 port := "3000"
 url := "http://localhost:" + port

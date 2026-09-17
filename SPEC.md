@@ -4,7 +4,7 @@
 
 Two layers, at two different stages.
 
-**Layer 1 — `effect-systemone`, the System One client: built and working.** Source in `src/`, tests
+**Layer 1 — `effect-evaluation`, the System One client: built and working.** Source in `src/`, tests
 in `test/`, four cookbook replications in `examples/`. 124 tests pass with no network access; typecheck,
 build, and package inspection pass. Its API is not yet stable, but it is real code rather than a
 proposal, and the rest of this document is written against what it revealed.
@@ -44,7 +44,7 @@ variance.
 case. A trajectory — tool calls, steps, intermediate messages — has to be in the case result from
 the beginning or the core contract gets re-cut later.
 
-## Layer 1 — `effect-systemone`
+## Layer 1 — `effect-evaluation`
 
 ### What it is
 
@@ -72,12 +72,12 @@ result.answers.refund.noul              // probability; no confidence field exis
 ### Modules
 
 ```
-effect-systemone            barrel
-effect-systemone/Question   question builders and types
-effect-systemone/Answer     answer types, wire schemas
-effect-systemone/SystemOne  service, layers, evaluate, retryTransient
-effect-systemone/Errors     tagged failures
-effect-systemone/Testing    deterministic layers
+effect-evaluation            barrel
+effect-evaluation/Question   question builders and types
+effect-evaluation/Answer     answer types, wire schemas
+effect-evaluation/SystemOne  service, layers, evaluate, retryTransient
+effect-evaluation/Errors     tagged failures
+effect-evaluation/Testing    deterministic layers
 ```
 
 ### Decisions made while building it
@@ -210,7 +210,7 @@ reports plainly rather than hiding.
   bindings it never defines. The build is therefore transpile-only (`--no-bundle`), which is the
   better choice for a peer-dependency library anyway. Relative imports carry `.js` specifiers so
   Node's ESM resolver works.
-- `effect-systemone` is unregistered on npm and free to claim; the tarball, the six subpath exports,
+- `effect-evaluation` is unregistered on npm and free to claim; the tarball, the six subpath exports,
   and `node16`/`nodenext` type resolution were checked against real build output.
 - No streaming and no batching, because the API has neither.
 - The API documents no temperature, seed, or idempotency key. Repeated trials are repeated requests,
@@ -402,15 +402,19 @@ Phase 1 is met when, additionally:
 
 ## Open decisions
 
-Closed by building layer 1: score algebra (typed union with distributions); TypeSafe in core (no —
-its own package, with the AI SDK adapter as a sibling); ESM-only; `effect` as a peer dependency;
-Effect v4 rc with TypeScript 5.9+; JSONL as the first sink; tracing in phase 1.
+Closed by building layer 1: score algebra (typed union with distributions); ESM-only; `effect` as a
+peer dependency; Effect v4 rc with TypeScript 5.9+; JSONL as the first sink; tracing in phase 1.
+
+**Reopened and decided the other way: one package, not two.** This document previously recorded
+"TypeSafe in core (no — its own package, with the AI SDK adapter as a sibling)", and layer 1 was
+built and published under that assumption. It now ships as `effect-evaluation`, so layer 2 grows
+inside the same package rather than beside it. The honest cost of that is worth stating: someone
+installing `effect-evaluation` today gets a TypeSafe System One client and no evaluation framework,
+and the name will only describe its contents once phase 1 lands. The benefit is one name, one
+version, and no cross-package contract to keep in step while the core types are still moving.
 
 Still open:
 
-- The developer entry point remains open (below), but the npm name does not: `effect-systemone` is
-  unregistered and free to claim, verified read-only against the registry. The layer 2 package name
-  is still unchosen.
 - The developer entry point: `bun test` integration, a CLI, a library call, or more than one.
 - Whether judge calibration ships in phase 2 or phase 1 — it is cheap to build and expensive to
   retrofit into a report format.

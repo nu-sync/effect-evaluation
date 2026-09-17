@@ -33,7 +33,7 @@ const toEffect = (result: Effect.Effect<unknown, SystemOneError> | unknown): Eff
  *
  * @example
  * ```ts
- * import { Testing } from "effect-systemone"
+ * import { Testing } from "effect-evaluation"
  *
  * const layer = Testing.layer((request) =>
  *   Testing.response({

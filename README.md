@@ -1,11 +1,17 @@
-# effect-systemone
+# effect-evaluation
 
 An Effect-native client for [TypeSafe AI](https://docs.typesafe.ai) System One models (Jev): typed
 questions in, probability distributions out, typed failures throughout.
 
+> **What's in the box today.** This `0.1.x` is the System One client and nothing else — there is no
+> dataset, target, scorer or report yet. Those are designed in `SPEC.md` and land in a later release;
+> the package is named for where it is going, not for everything it currently does. If a System One
+> client is what you want, it is complete and tested. If you came for an evaluation framework, watch
+> this space rather than installing it.
+
 ```ts
 import { Effect } from "effect"
-import { Question, SystemOne } from "effect-systemone"
+import { Question, SystemOne } from "effect-evaluation"
 
 const program = SystemOne.evaluate({
   state: { message: "I was charged twice. Please refund the duplicate." },
@@ -43,7 +49,7 @@ rather than bending an existing one. It is a normal Effect service: a `Layer` su
 ## Install
 
 ```sh
-bun add effect-systemone effect
+bun add effect-evaluation effect
 ```
 
 `effect` is a peer dependency (v4 rc or later). Node 20+ or Bun.
@@ -117,7 +123,7 @@ Silent retries hide both latency and spend, so all of this is opt-in.
 ## Testing
 
 ```ts
-import { Testing } from "effect-systemone"
+import { Testing } from "effect-evaluation"
 
 const layer = Testing.layerFixture(
   Testing.response({ answers: { refund: { type: "noul", noul: 0.97 } } })

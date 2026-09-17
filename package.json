@@ -1,5 +1,5 @@
 {
-  "name": "effect-systemone",
+  "name": "effect-evaluation",
   "version": "0.1.0",
   "description": "Effect-native client for TypeSafe AI System One models (Jev): typed questions, probabilistic answers, typed failures.",
   "type": "module",
