@@ -83,13 +83,18 @@ export const read = (
 export const respond = (state: { readonly id?: unknown }): unknown | undefined => {
   const fixture = typeof state.id === "string" ? recorded[state.id] : undefined
   if (fixture === undefined) return undefined
+  // The live API returns a probability for every group offered; `record.ts`
+  // omits the zero-weight ones to keep the recording readable. Reconcile now
+  // checks that a choice answer's `probabilities` covers every offered
+  // option, so the omitted zeros have to be put back before this fixture can
+  // stand in for a real response.
+  const probabilities = Object.fromEntries(
+    groupCodes.map((code) => [code, fixture.probabilities[code] ?? 0])
+  ) as { readonly [Code in GroupCode]: number }
   return Testing.response({
     model: recordedModel,
     answers: {
-      industry: Testing.choiceAnswer(
-        fixture.probabilities as { readonly [key: string]: number },
-        fixture.confidence
-      )
+      industry: Testing.choiceAnswer(probabilities, fixture.confidence)
     },
     usage: { inputTokens: 1438, outputTokens: 12 }
   })

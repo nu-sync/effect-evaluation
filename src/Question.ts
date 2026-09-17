@@ -198,6 +198,16 @@ export const score = <const L extends readonly [Entry, Entry, ...Array<Entry>]>(
 export const scoreLevelBounds = { min: 2, max: 10 } as const
 
 /**
+ * The documented bounds on a choice question's option count. The API documents
+ * a 255-option ceiling; a document with more candidates than that is expected
+ * to go through a windowing pass first rather than being offered as one choice
+ * (see the semantic-find cookbook).
+ *
+ * @since 0.1.0
+ */
+export const choiceOptionBounds = { min: 2, max: 255 } as const
+
+/**
  * Checks a question set against the constraints the API documents, so an
  * obviously invalid request fails locally instead of costing a round trip.
  *
@@ -217,8 +227,11 @@ export const validate = (questions: Questions): string | undefined => {
     switch (question.type) {
       case "choice": {
         const options = Object.keys(question.criteria)
-        if (options.length < 2) {
-          return `question ${JSON.stringify(name)} is a choice with ${options.length} option(s); at least 2 are required`
+        if (options.length < choiceOptionBounds.min) {
+          return `question ${JSON.stringify(name)} is a choice with ${options.length} option(s); at least ${choiceOptionBounds.min} are required`
+        }
+        if (options.length > choiceOptionBounds.max) {
+          return `question ${JSON.stringify(name)} is a choice with ${options.length} option(s); at most ${choiceOptionBounds.max} are supported`
         }
         break
       }

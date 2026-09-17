@@ -8,7 +8,7 @@
  *
  * @since 0.1.0
  */
-import { Config, Context, Effect, Layer, Redacted, Schedule, Schema } from "effect"
+import { Config, Context, Duration, Effect, Function, Layer, Redacted, Schedule, Schema } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import * as Answer from "./Answer.js"
 import {
@@ -61,11 +61,26 @@ export interface EvaluateRequest<Q extends Question.Questions> {
 }
 
 /**
- * The result of one request: the typed answer map, what it cost, and the
- * decoded wire response it came from.
+ * The result of one request: the typed answer map, what it cost, the decoded
+ * wire response it came from, and the verbatim body it was decoded from.
  *
- * `raw` is kept deliberately. An aggregate is never enough evidence, and the
- * distribution behind an answer is usually the interesting part.
+ * `raw` and `body` are both kept, deliberately, and are not the same thing:
+ *
+ * - `raw` is the **decoded, schema-checked** view — `Answer.DecodedResponse`,
+ *   the shape `Answer.ResponseSchema` models. `Schema.Struct` drops any
+ *   property it does not declare, so `raw` only ever shows what this version
+ *   of the client already knows how to read.
+ * - `body` is **what actually arrived**: the verbatim, undecoded JSON the
+ *   service returned, before `Schema` touched it. A request id, a per-answer
+ *   rationale, a new usage counter — anything the API adds tomorrow that this
+ *   client does not model yet — survives here even though it is invisible on
+ *   `raw`.
+ *
+ * An aggregate is never enough evidence, and neither, on its own, is a value
+ * a schema has already filtered. Keep `body` around for anything that needs
+ * the response as it truly was — an audit trail, a content-addressed
+ * artifact, a future decoder — and use `raw` for everything that just wants
+ * the typed, checked view.
  *
  * @since 0.1.0
  */
@@ -74,6 +89,7 @@ export interface Evaluation<Q extends Question.Questions> {
   readonly answers: Answer.AnswersFor<Q>
   readonly usage: Answer.Usage
   readonly raw: Answer.DecodedResponse
+  readonly body: unknown
 }
 
 /**
@@ -107,6 +123,10 @@ export interface Options {
   readonly baseUrl?: string | undefined
 }
 
+// Only the delta-seconds form of `Retry-After` is handled. RFC 9110 also
+// allows an HTTP-date form; that form fails `Number(raw)` and degrades to
+// `undefined` rather than being parsed, which just means the schedule's own
+// backoff runs with no server hint — never a wrong wait.
 const parseRetryAfter = (headers: Readonly<Record<string, string | undefined>>): number | undefined => {
   const raw = headers["retry-after"]
   if (raw === undefined) return undefined
@@ -123,16 +143,31 @@ const bodyText = (response: HttpClientResponse.HttpClientResponse): Effect.Effec
  *
  * A missing answer, an answer of the wrong type, or a chosen option that was
  * never offered all fail here rather than being coerced — each one would make
- * the static answer type a lie.
+ * the static answer type a lie. The same reasoning extends to the shape of the
+ * distribution itself: `Choice.probabilities` is typed as a total map over
+ * every offered option (`noUncheckedIndexedAccess` does not see through a
+ * mapped type over a literal union, so every read comes back typed `number`),
+ * and `Score.legend`/`probabilities` are read by level index up to
+ * `levelCount`. A partial response would make those typed reads lie about
+ * being `number`, so a missing or extra entry fails here too, before it can
+ * reach a caller as `undefined`.
  *
  * Exported so test and replay layers decode and check exactly like the live
  * client does.
+ *
+ * `body` is the verbatim, undecoded JSON `decoded` came from — reconcile
+ * takes it only to carry it through onto {@link Evaluation.body} unchanged,
+ * never to read from it. Its only caller today is {@link decode}, which
+ * already has the raw JSON in hand; a caller reconciling a decoded value with
+ * no body of its own may pass `decoded` itself, since a decoded value is
+ * always a subset of the JSON it came from.
  *
  * @since 0.1.0
  */
 export const reconcile = <const Q extends Question.Questions>(
   questions: Q,
-  decoded: Answer.DecodedResponse
+  decoded: Answer.DecodedResponse,
+  body: unknown
 ): Effect.Effect<Evaluation<Q>, ResponseError> =>
   Effect.suspend(() => {
     const answers: Record<string, Answer.Any> = {}
@@ -161,6 +196,56 @@ export const reconcile = <const Q extends Question.Questions>(
             })
           )
         }
+        // `probabilities` is typed as a total map over every offered option —
+        // a missing entry would make that typed `number` read a lie, and an
+        // extra one would be a live option the question never offered.
+        for (const option of Object.keys(question.criteria)) {
+          if (!Object.hasOwn(answer.probabilities, option)) {
+            return Effect.fail(
+              new ResponseError({
+                reason:
+                  `question ${JSON.stringify(name)} offers option ${JSON.stringify(option)}, but the response's probabilities has no entry for it`
+              })
+            )
+          }
+        }
+        for (const option of Object.keys(answer.probabilities)) {
+          if (!Object.hasOwn(question.criteria, option)) {
+            return Effect.fail(
+              new ResponseError({
+                reason:
+                  `question ${JSON.stringify(name)}'s probabilities included option ${
+                    JSON.stringify(option)
+                  }, which was not offered`
+              })
+            )
+          }
+        }
+      }
+      if (answer.type === "score" && question.type === "score") {
+        // `legend`/`probabilities` are read by level index up to `levelCount`;
+        // a legend with fewer entries than the question offered would leave
+        // `Answer.normalized` dividing by the wrong span instead of failing.
+        const levels = (question.criteria as ReadonlyArray<Question.Entry>).length
+        for (let level = 0; level < levels; level++) {
+          const key = String(level)
+          if (!Object.hasOwn(answer.legend, key)) {
+            return Effect.fail(
+              new ResponseError({
+                reason:
+                  `question ${JSON.stringify(name)} offers ${levels} level(s), but the response's legend has no entry for level ${key}`
+              })
+            )
+          }
+          if (!Object.hasOwn(answer.probabilities, key)) {
+            return Effect.fail(
+              new ResponseError({
+                reason:
+                  `question ${JSON.stringify(name)} offers ${levels} level(s), but the response's probabilities has no entry for level ${key}`
+              })
+            )
+          }
+        }
       }
       answers[name] = answer
     }
@@ -172,7 +257,8 @@ export const reconcile = <const Q extends Question.Questions>(
         outputTokens: decoded.usage.output_tokens,
         totalTokens: decoded.usage.input_tokens + decoded.usage.output_tokens
       },
-      raw: decoded
+      raw: decoded,
+      body
     })
   })
 
@@ -180,6 +266,10 @@ const decodeResponse = Schema.decodeUnknownEffect(Answer.ResponseSchema)
 
 /**
  * Decodes raw JSON into a checked, typed evaluation.
+ *
+ * `json` is threaded through unchanged onto {@link Evaluation.body}: `raw`
+ * (the decoded value) only ever carries what `Answer.ResponseSchema` models,
+ * so `body` is what preserves anything this client does not decode yet.
  *
  * @since 0.1.0
  */
@@ -191,7 +281,7 @@ export const decode = <const Q extends Question.Questions>(
     Effect.mapError((cause) =>
       new ResponseError({ reason: "response body did not match the documented shape", cause })
     ),
-    Effect.flatMap((decoded) => reconcile(questions, decoded))
+    Effect.flatMap((decoded) => reconcile(questions, decoded, json))
   )
 
 const handleResponse = <const Q extends Question.Questions>(
@@ -334,6 +424,44 @@ export const evaluate = <const Q extends Question.Questions>(
   Effect.flatMap(SystemOne, (service) => service.evaluate(request))
 
 /**
+ * Options for {@link retryTransient}.
+ *
+ * @since 0.1.0
+ */
+export interface RetryTransientOptions {
+  readonly times?: number | undefined
+  /** Defaults to exponential backoff from 500ms with jitter. */
+  readonly schedule?: Schedule.Schedule<unknown, unknown, never> | undefined
+  /**
+   * Honour a 429's `Retry-After` header by sleeping for that long before the
+   * schedule's own delay runs. Defaults to `true`.
+   */
+  readonly respectRetryAfter?: boolean | undefined
+  /**
+   * Upper bound on the `Retry-After` sleep, so a hostile or absurd header
+   * cannot park a fiber indefinitely. Defaults to 60 seconds.
+   */
+  readonly maxRetryAfter?: Duration.Input | undefined
+}
+
+// A 429 whose `retryAfterSeconds` is present and positive is delayed by that
+// many seconds (capped) before being re-failed, so the exponential schedule
+// wrapped around this waits again on top of it rather than instead of it. The
+// sleep is `Effect.sleep` under the hood, so it is interruptible like any
+// other retry delay — interrupting the fiber does not wait out the cap first.
+const withRetryAfter = <A, E extends SystemOneError, R>(
+  self: Effect.Effect<A, E, R>,
+  maxRetryAfter: Duration.Input
+): Effect.Effect<A, E, R> =>
+  Effect.catch(self, (error) => {
+    if (error instanceof RateLimitError && error.retryAfterSeconds !== undefined && error.retryAfterSeconds > 0) {
+      const wait = Duration.min(Duration.seconds(error.retryAfterSeconds), Duration.fromInputUnsafe(maxRetryAfter))
+      return Effect.delay(Effect.fail(error), wait)
+    }
+    return Effect.fail(error)
+  })
+
+/**
  * Retries only the failures that are actually worth retrying — transport
  * errors, 429, and 5xx/529 — with exponential backoff and jitter.
  *
@@ -341,18 +469,37 @@ export const evaluate = <const Q extends Question.Questions>(
  * but a client that silently retries hides both latency and spend. Nothing in
  * this package retries unless you ask for it here.
  *
+ * A 429 that carries a `Retry-After` hint is honoured before the schedule's
+ * own backoff runs (see {@link RetryTransientOptions.respectRetryAfter}); the
+ * wait is interruptible and capped by
+ * {@link RetryTransientOptions.maxRetryAfter} so a hostile or absurd header
+ * cannot park a fiber indefinitely.
+ *
+ * Dual: usable data-first (`SystemOne.retryTransient(program, options)`) or
+ * data-last (`program.pipe(SystemOne.retryTransient(options))`).
+ *
  * @since 0.1.0
  */
-export const retryTransient = <A, E extends SystemOneError, R>(
-  self: Effect.Effect<A, E, R>,
-  options?: {
-    readonly times?: number | undefined
-    /** Defaults to exponential backoff from 500ms with jitter. */
-    readonly schedule?: Schedule.Schedule<unknown, unknown, never> | undefined
+export const retryTransient: {
+  (
+    options?: RetryTransientOptions
+  ): <A, E extends SystemOneError, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>
+  <A, E extends SystemOneError, R>(
+    self: Effect.Effect<A, E, R>,
+    options?: RetryTransientOptions
+  ): Effect.Effect<A, E, R>
+} = Function.dual(
+  (args) => Effect.isEffect(args[0]),
+  <A, E extends SystemOneError, R>(
+    self: Effect.Effect<A, E, R>,
+    options?: RetryTransientOptions
+  ): Effect.Effect<A, E, R> => {
+    const respectRetryAfter = options?.respectRetryAfter ?? true
+    const guarded = respectRetryAfter ? withRetryAfter(self, options?.maxRetryAfter ?? "60 seconds") : self
+    return Effect.retry(guarded, {
+      schedule: options?.schedule ?? Schedule.jittered(Schedule.exponential("500 millis")),
+      times: options?.times ?? 3,
+      while: (error: E) => isTransient(error)
+    })
   }
-): Effect.Effect<A, E, R> =>
-  Effect.retry(self, {
-    schedule: options?.schedule ?? Schedule.jittered(Schedule.exponential("500 millis")),
-    times: options?.times ?? 3,
-    while: (error: E) => isTransient(error)
-  })
+)
