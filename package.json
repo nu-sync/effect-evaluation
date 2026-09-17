@@ -45,7 +45,8 @@
     "build": "rm -rf dist && bun build src/*.ts --outdir dist --target node --format esm --no-bundle && tsc -p tsconfig.build.json",
     "example": "bun run examples/classification-using-confidence.ts",
     "check": "bun run typecheck && bun test && bun run build",
-    "web": "bun run examples/web/server.ts"
+    "web": "bun run examples/web/server.ts",
+    "prepublishOnly": "bun run check"
   },
   "peerDependencies": {
     "effect": ">=4.0.0-rc.115"
