@@ -1,0 +1,11 @@
+{
+  "status": 200,
+  "headers": {
+    "content-length": "769",
+    "content-type": "application/json",
+    "date": "Thu, 17 Sep 2026 13:59:54 GMT",
+    "server": "istio-envoy",
+    "x-envoy-upstream-service-time": "192",
+    "x-typesafe-request-id": "req_01a0afaab3097bd6b0e591ee1067c17c"
+  }
+}
