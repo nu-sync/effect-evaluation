@@ -5,7 +5,7 @@
 Two layers, at two different stages.
 
 **Layer 1 — `effect-systemone`, the System One client: built and working.** Source in `src/`, tests
-in `test/`, a cookbook replication in `examples/`. 20 tests pass with no network access; typecheck,
+in `test/`, four cookbook replications in `examples/`. 124 tests pass with no network access; typecheck,
 build, and package inspection pass. Its API is not yet stable, but it is real code rather than a
 proposal, and the rest of this document is written against what it revealed.
 
@@ -94,6 +94,29 @@ reconciled against the questions that were asked. A missing answer, an answer wh
 match its question, or a chosen option that was never offered each fail as `ResponseError`. Any of
 them would make the static type a lie, and a cast would hide exactly the case worth seeing.
 
+**The distribution must be total, not just the winner.** Reconcile also rejects a choice answer
+whose `probabilities` omits an offered option or names one that was never offered, and a score
+answer whose `legend`/`probabilities` skip a level. Without this, `Choice.probabilities` is typed as
+a total map over the literal option union — `noUncheckedIndexedAccess` cannot see through that
+mapped type — so a partial response would make a typed `number` read `undefined` at runtime instead
+of failing where the mistake actually is. The same gap on a `Score` legend is worse than a crash: a
+legend missing one level lets `Answer.normalized` divide by the wrong span and return a plausible,
+silently wrong number.
+
+**A rate limit's own hint is honoured, capped, and interruptible.** `retryTransient` sleeps for a
+429's `retry-after` seconds (if present and positive) before its wrapped schedule's backoff runs on
+top, rather than instead of it — the server's estimate and this client's jitter are different
+signals. The sleep is capped by `maxRetryAfter` (default 60s, opt-out via `respectRetryAfter: false`)
+so a hostile or absurd header cannot park a fiber indefinitely, and it is built on `Effect.delay`,
+so interrupting the fiber does not wait out the cap first.
+
+**The decoded response is not the whole response.** `Evaluation.raw` is the schema-decoded view, and
+`Schema.Struct` drops what it does not model — so a field the API adds tomorrow would be gone before a
+caller saw it. For a package whose premise is that an aggregate is never enough evidence, that is the
+wrong default, and it is a one-way door for layer 2's content-addressed execute artifacts. So
+`Evaluation` also carries `body: unknown`, the verbatim JSON as it arrived. `raw` is the checked view;
+`body` is what actually came back, including anything this client does not model yet.
+
 **Pre-flight validation.** An empty question set, a choice with fewer than two options, or a score
 outside 2–10 levels fails locally, before the request. A test asserts the network is never touched.
 The service stays the authority; this only catches what the docs already declare invalid.
@@ -122,6 +145,18 @@ instead, which is how 401 / 429-with-`retry-after` / 529 / undocumented-status h
 to end. The suite covers typed answer inference, usage normalization, all four rejection paths,
 pre-flight validation, request shape (URL, bearer token, body), status mapping, and that
 `retryTransient` retries a 429 three times and an `AuthError` zero times. No test needs a key.
+
+**Golden fixtures are what keep the rest of the suite honest.** Every other fixture in this repo is
+built by `Testing.response`, which constructs the envelope from this client's own assumptions about
+the wire shape — so a suite of them can only prove the client agrees with itself. `test/golden/`
+holds verbatim response bodies from real requests, with their status and headers, and
+`test/golden.test.ts` pins the field names the client depends on against those bytes:
+`usage.input_tokens` / `output_tokens`, answers keyed by question name, a noul answer genuinely
+carrying no `confidence`, and a structured Score `legend` round-tripping as objects rather than
+strings. Recording them found no discrepancy — the wire shape is what `src/` assumed — which is a
+result worth having rather than a formality, because until then nothing in the suite had seen a real
+response body. The golden tests assert shapes and key sets only, never particular probabilities, so
+re-recording is not a regression.
 
 ### The examples
 
@@ -155,13 +190,28 @@ This is also the first thing the spec had no answer for: what a developer *looks
 slider is the small version of the argument in layer 2 that a report needs a local developer loop,
 not just a number.
 
+Two later examples exist because the first two did not exercise the thing this package is for. Both
+reduce every answer to one scalar and threshold it — `confidence` in one, four nouls and a score in
+the other — so neither ever reads `probabilities`, and the claim that the full distribution is the
+product went undemonstrated. `examples/semantic-find/` ranks the lines of this document with a Choice
+and asks a companion Noul whether the document answers the query at all: asked about pricing, which
+this document never discusses, a line still takes 86% of the mass because Choice probabilities sum to
+1, and the Noul's 0.02 is the only reading that can say "nothing here". It also has to implement the
+documented windowing workaround, because 282 candidate lines exceed the API's 255-option cap.
+`examples/hierarchy/` walks the SIC taxonomy division-first with greedy and beam search, where
+`Answer.top` is the whole mechanism — keeping the distribution is what makes a beam expressible.
+Neither example measures anything: on ten filings the flat strategy matched the human label more
+often than either hierarchical one, and greedy and beam never diverged, both of which the demo
+reports plainly rather than hiding.
+
 ### Known rough edges
 
 - `bun build` in bundle mode drops `export * as ns from` re-exports, emitting an export list for
   bindings it never defines. The build is therefore transpile-only (`--no-bundle`), which is the
   better choice for a peer-dependency library anyway. Relative imports carry `.js` specifiers so
   Node's ESM resolver works.
-- The package name is provisional and unverified on npm.
+- `effect-systemone` is unregistered on npm and free to claim; the tarball, the six subpath exports,
+  and `node16`/`nodenext` type resolution were checked against real build output.
 - No streaming and no batching, because the API has neither.
 - The API documents no temperature, seed, or idempotency key. Repeated trials are repeated requests,
   and this client cannot make them reproducible.
@@ -358,7 +408,9 @@ Effect v4 rc with TypeScript 5.9+; JSONL as the first sink; tracing in phase 1.
 
 Still open:
 
-- The npm package names, neither of which is verified as available.
+- The developer entry point remains open (below), but the npm name does not: `effect-systemone` is
+  unregistered and free to claim, verified read-only against the registry. The layer 2 package name
+  is still unchosen.
 - The developer entry point: `bun test` integration, a CLI, a library call, or more than one.
 - Whether judge calibration ships in phase 2 or phase 1 — it is cheap to build and expensive to
   retrofit into a report format.
