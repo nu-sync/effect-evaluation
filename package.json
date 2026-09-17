@@ -1,0 +1,72 @@
+{
+  "name": "effect-systemone",
+  "version": "0.1.0",
+  "description": "Effect-native client for TypeSafe AI System One models (Jev): typed questions, probabilistic answers, typed failures.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./Answer": {
+      "types": "./dist/Answer.d.ts",
+      "import": "./dist/Answer.js"
+    },
+    "./Errors": {
+      "types": "./dist/Errors.d.ts",
+      "import": "./dist/Errors.js"
+    },
+    "./Question": {
+      "types": "./dist/Question.d.ts",
+      "import": "./dist/Question.js"
+    },
+    "./SystemOne": {
+      "types": "./dist/SystemOne.d.ts",
+      "import": "./dist/SystemOne.js"
+    },
+    "./Testing": {
+      "types": "./dist/Testing.d.ts",
+      "import": "./dist/Testing.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "build": "rm -rf dist && bun build src/*.ts --outdir dist --target node --format esm --no-bundle && tsc -p tsconfig.build.json",
+    "example": "bun run examples/classification-using-confidence.ts",
+    "check": "bun run typecheck && bun test && bun run build",
+    "web": "bun run examples/web/server.ts"
+  },
+  "peerDependencies": {
+    "effect": ">=4.0.0-rc.115"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "@types/node": "^22.20.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "effect": "4.0.0-rc.115",
+    "happy-dom": "^20.14.5",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
+  },
+  "keywords": [
+    "effect",
+    "typesafe-ai",
+    "jev",
+    "system-one",
+    "classification",
+    "llm"
+  ],
+  "license": "MIT"
+}
