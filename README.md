@@ -1,4 +1,4 @@
-# effect-evaluation
+# @nu-sync/effect-evaluation
 
 An Effect-native client for [TypeSafe AI](https://docs.typesafe.ai) System One models (Jev): typed
 questions in, probability distributions out, typed failures throughout.
@@ -11,7 +11,7 @@ questions in, probability distributions out, typed failures throughout.
 
 ```ts
 import { Effect } from "effect"
-import { Question, SystemOne } from "effect-evaluation"
+import { Question, SystemOne } from "@nu-sync/effect-evaluation"
 
 const program = SystemOne.evaluate({
   state: { message: "I was charged twice. Please refund the duplicate." },
@@ -49,7 +49,7 @@ rather than bending an existing one. It is a normal Effect service: a `Layer` su
 ## Install
 
 ```sh
-bun add effect-evaluation effect
+bun add @nu-sync/effect-evaluation effect
 ```
 
 `effect` is a peer dependency (v4 rc or later). Node 20+ or Bun.
@@ -123,7 +123,7 @@ Silent retries hide both latency and spend, so all of this is opt-in.
 ## Testing
 
 ```ts
-import { Testing } from "effect-evaluation"
+import { Testing } from "@nu-sync/effect-evaluation"
 
 const layer = Testing.layerFixture(
   Testing.response({ answers: { refund: { type: "noul", noul: 0.97 } } })

@@ -108,7 +108,7 @@ export interface Service {
  *
  * @since 0.1.0
  */
-export class SystemOne extends Context.Service<SystemOne, Service>()("effect-evaluation/SystemOne") {}
+export class SystemOne extends Context.Service<SystemOne, Service>()("@nu-sync/effect-evaluation/SystemOne") {}
 
 /**
  * How to reach the service.
@@ -406,7 +406,7 @@ export const layerFetch = (options?: {
  * @example
  * ```ts
  * import { Effect } from "effect"
- * import { Question, SystemOne } from "effect-evaluation"
+ * import { Question, SystemOne } from "@nu-sync/effect-evaluation"
  *
  * const program = SystemOne.evaluate({
  *   state: "I was charged twice. Please refund the extra charge.",

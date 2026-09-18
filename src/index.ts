@@ -4,7 +4,7 @@
  * @example
  * ```ts
  * import { Effect } from "effect"
- * import { Question, SystemOne } from "effect-evaluation"
+ * import { Question, SystemOne } from "@nu-sync/effect-evaluation"
  *
  * const program = SystemOne.evaluate({
  *   state: "The export button crashes the settings page in Safari.",
@@ -32,7 +32,7 @@ export { Answer, Question, SystemOne, Testing }
 // under one imported name (`Question.choice`, `SystemOne.evaluate`); `Errors`
 // is instead a flat set of sibling classes with no shared verb to hang a
 // namespace off of, examples and the demo server already import them flat
-// (`import { ResponseError } from "effect-evaluation"`), and a class imported
+// (`import { ResponseError } from "@nu-sync/effect-evaluation"`), and a class imported
 // through a namespace still prints as `Errors.AuthError` in a stack trace
 // either way — so the namespace would only be a second, redundant path to the
 // same symbols. Two public paths to one symbol is twice the surface this

@@ -1,7 +1,18 @@
 {
-  "name": "effect-evaluation",
+  "name": "@nu-sync/effect-evaluation",
   "version": "0.1.0",
   "description": "Effect-native client for TypeSafe AI System One models (Jev): typed questions, probabilistic answers, typed failures.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nu-sync/effect-evaluation.git"
+  },
+  "homepage": "https://github.com/nu-sync/effect-evaluation#readme",
+  "bugs": {
+    "url": "https://github.com/nu-sync/effect-evaluation/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {

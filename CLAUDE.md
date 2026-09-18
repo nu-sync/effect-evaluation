@@ -31,7 +31,7 @@ One test file: `bun test test/client.test.ts`. One test by name: `bun test -t "r
 ## Layout
 
 ```
-src/        the published package, effect-evaluation (no deps beyond peer `effect`)
+src/        the published package, @nu-sync/effect-evaluation (no deps beyond peer `effect`)
 test/       bun:test suites; test/web.test.ts drives the demo server via happy-dom
 test/golden/  verbatim live response bodies + status/headers; the only fixtures this repo did
             not build itself, and the only check on the wire shape src/ assumes

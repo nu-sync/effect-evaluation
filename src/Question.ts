@@ -112,7 +112,7 @@ export type Questions = { readonly [name: string]: Any }
  *
  * @example
  * ```ts
- * import { Question } from "effect-evaluation"
+ * import { Question } from "@nu-sync/effect-evaluation"
  *
  * const urgent = Question.noul({
  *   instructions: "Does this message express urgency?"
@@ -135,7 +135,7 @@ export const noul = (options: {
  *
  * @example
  * ```ts
- * import { Question } from "effect-evaluation"
+ * import { Question } from "@nu-sync/effect-evaluation"
  *
  * const department = Question.choice({
  *   instructions: "Which team should handle this?",
@@ -163,7 +163,7 @@ export const choice = <const C extends { readonly [key: string]: Criterion }>(op
  *
  * @example
  * ```ts
- * import { Question } from "effect-evaluation"
+ * import { Question } from "@nu-sync/effect-evaluation"
  *
  * const severity = Question.score({
  *   instructions: "How severe is the reported issue?",
