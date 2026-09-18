@@ -11,7 +11,7 @@
  * live API returns the full distribution across every option offered. A
  * single recording is one draw from a distribution, not a measurement.
  */
-import type { DivisionCode, GroupCode } from "../sic.js"
+import type { DivisionCode, GroupCode } from "../data/sic.js"
 
 export interface Reading<Code extends string> {
   readonly probabilities: Partial<Record<Code, number>>

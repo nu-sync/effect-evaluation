@@ -176,9 +176,10 @@ rather than going live with an empty bearer token.
 
 ## Demos
 
-Four, each replicating a TypeSafe cookbook. The first two run from the terminal or the browser and
-share one Effect HTTP server (`HttpRouter.toWebHandler` handed to `Bun.serve`, no platform package);
-the last two are terminal-only.
+Four, each replicating a TypeSafe cookbook, one folder per demo under [`examples/`](examples/README.md).
+The first two run from the terminal or the browser and share one Effect HTTP server
+(`HttpRouter.toWebHandler` handed to `Bun.serve`, no platform package); the last two are
+terminal-only.
 
 ### Classification using confidence
 

@@ -20,11 +20,12 @@
  * @since 0.1.0
  */
 import * as Answer from "./Answer.js"
+import * as Provider from "./Provider.js"
 import * as Question from "./Question.js"
 import * as SystemOne from "./SystemOne.js"
 import * as Testing from "./Testing.js"
 
-export { Answer, Question, SystemOne, Testing }
+export { Answer, Provider, Question, SystemOne, Testing }
 
 // Errors gets exactly one public path: the flat names (`AuthError`,
 // `ResponseError`, `isTransient`, ...), not also an `Errors` namespace. The

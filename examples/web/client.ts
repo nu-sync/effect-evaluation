@@ -7,7 +7,7 @@
  */
 import { Effect, Layer } from "effect"
 import { ResponseError, SystemOne, Testing } from "../../src/index.js"
-import { isLive, respond as respondClassification } from "../classification.js"
+import { isLive, respond as respondClassification } from "../classification/classification.js"
 import { recorded as guardrailRecordings, recordedModel as guardrailModel } from "../guardrails/recorded.js"
 import { respondWith } from "../guardrails/policy.js"
 

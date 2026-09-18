@@ -10,7 +10,7 @@
  */
 import { Console, Effect } from "effect"
 import { SystemOne } from "../../src/index.js"
-import { filings } from "../filings.js"
+import { filings } from "../data/filings.js"
 import { defaultBeamWidth, groupQuestionName, isLive, readRaw } from "./search.js"
 
 const captured = Effect.gen(function*() {
@@ -85,7 +85,7 @@ ${groupEntries}
  * live API returns the full distribution across every option offered. A
  * single recording is one draw from a distribution, not a measurement.
  */
-import type { DivisionCode, GroupCode } from "../sic.js"
+import type { DivisionCode, GroupCode } from "../data/sic.js"
 
 export interface Reading<Code extends string> {
   readonly probabilities: Partial<Record<Code, number>>

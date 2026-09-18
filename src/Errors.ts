@@ -38,19 +38,30 @@ export class AuthError extends Data.TaggedError("SystemOne/AuthError")<{
 }
 
 /**
- * The request was rejected before evaluation (HTTP 422), or failed this
- * client's own pre-flight validation. Terminal: retrying sends the same
- * invalid request again.
+ * The request was rejected before evaluation (one of the documented terminal
+ * 4xx statuses — 400, 402, 403, 404, 413, or 422), or failed this client's own
+ * pre-flight validation. Terminal: retrying sends the same invalid request
+ * again.
+ *
+ * `status` is populated only when a real HTTP response produced this error —
+ * it carries `r.status` verbatim from the transport-mapped case that
+ * constructed it. A local pre-flight rejection (`Question.validate`,
+ * `Provider.preflight`) never reached the network, so it leaves `status`
+ * `undefined` rather than inventing one; this stopped hard-coding `422` as if
+ * every rejection came from TypeSafe now that OpenRouter's terminal 4xx
+ * statuses share this same error.
  *
  * @since 0.1.0
  */
 export class RequestError extends Data.TaggedError("SystemOne/RequestError")<{
   readonly reason: string
   readonly body?: string
+  readonly status?: number | undefined
 }> {
-  readonly status = 422
   override get message(): string {
-    return `System One rejected the request: ${this.reason}`
+    return this.status === undefined
+      ? `System One rejected the request: ${this.reason}`
+      : `System One rejected the request (${this.status}): ${this.reason}`
   }
 }
 
@@ -116,6 +127,31 @@ export class EncodeError extends Data.TaggedError("SystemOne/EncodeError")<{
 }> {
   override get message(): string {
     return `System One request body could not be encoded as JSON: ${String(this.cause)}`
+  }
+}
+
+/**
+ * No usable credentials were found while building a {@link SystemOne} layer
+ * from configuration — `layerConfig` or `layerFetch` found no non-blank value
+ * for any environment variable the selected provider (or, with no explicit
+ * provider, any of the three variables tried in order) accepts. `reason`
+ * names exactly the variable(s) that were checked.
+ *
+ * This is a layer-construction-time failure, not a per-request one: it can
+ * only happen once, before the first `evaluate` call, so it is deliberately
+ * not a member of {@link SystemOneError}. Effect v4's `Config.ConfigError`
+ * has no public constructor for a message like "tried three env vars, found
+ * none" — its cases wrap an internal `SourceError`/`SchemaError` that library
+ * code isn't meant to synthesize — so this is a small dedicated error instead
+ * of a hand-built `ConfigError`.
+ *
+ * @since 0.1.0
+ */
+export class MissingCredentialsError extends Data.TaggedError("SystemOne/MissingCredentialsError")<{
+  readonly reason: string
+}> {
+  override get message(): string {
+    return `System One credentials are not configured: ${this.reason}`
   }
 }
 

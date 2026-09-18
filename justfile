@@ -40,7 +40,7 @@ serve: install
 # Classification, from the terminal.
 [group('demo')]
 cli: install
-    bun run examples/classification-using-confidence.ts
+    bun run examples/classification/cli.ts
 
 # Guardrails, from the terminal — every message under all three policies.
 [group('demo')]
@@ -62,11 +62,12 @@ cli-hierarchy: install
 record:
     @echo "  Each recorder makes live requests and spends tokens. Run one at a time:"
     @echo
-    @echo "    just record-classification   10 requests — examples/recorded.ts"
+    @echo "    just record-classification   10 requests — examples/classification/recorded.ts"
     @echo "    just record-guardrails       12 requests — examples/guardrails/recorded.ts"
     @echo "    just record-find             10 requests — examples/semantic-find/recorded.ts"
     @echo "    just record-hierarchy        20 requests — examples/hierarchy/recorded.ts"
-    @echo "    just record-golden            2 requests — test/golden/*.json"
+    @echo "    just record-golden            2 requests — test/golden/*.json (needs TYPESAFE_API_KEY)"
+    @echo "    just record-openrouter        1 request  — test/golden/openrouter-*.json (needs OPENROUTER_API_KEY)"
     @echo
     @echo "  A recording is one draw from a distribution, not a measurement, so the"
     @echo "  numbers a re-record produces will not match the ones it replaces."
@@ -74,7 +75,7 @@ record:
 # Re-record the classification demo's fixtures. Needs a key; spends tokens.
 [group('record')]
 record-classification: install
-    bun run examples/record.ts
+    bun run examples/classification/record.ts
 
 # Re-record the guardrails demo's fixtures. Needs a key; spends tokens.
 [group('record')]
@@ -95,6 +96,11 @@ record-hierarchy: install
 [group('record')]
 record-golden: install
     bun run test/golden/record.ts
+
+# Record the OpenRouter golden wire-shape fixture. Needs OPENROUTER_API_KEY; spends tokens.
+[group('record')]
+record-openrouter: install
+    bun run test/golden/record-openrouter.ts
 
 # Say whether a live API key is configured, and where it was found.
 [group('demo')]

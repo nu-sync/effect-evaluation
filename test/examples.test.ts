@@ -26,7 +26,7 @@ import {
   wholeDocumentCapMessage
 } from "../examples/semantic-find/search.js"
 
-import { filings } from "../examples/filings.js"
+import { filings } from "../examples/data/filings.js"
 import { recorded as hierarchyRecorded } from "../examples/hierarchy/recorded.js"
 import {
   beamPaths,

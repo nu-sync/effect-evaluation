@@ -4,7 +4,7 @@
  * A replication of TypeSafe's cookbook of the same name:
  * https://docs.typesafe.ai/cookbooks/hierarchical_classification
  *
- * `examples/classification.ts` offers all 60 SIC groups flat, in one Choice.
+ * `examples/classification/classification.ts` offers all 60 SIC groups flat, in one Choice.
  * This walks the same taxonomy division → group instead, two ways:
  *
  *   - greedy takes the top child at each level.
@@ -18,14 +18,14 @@
  *
  * Runs offline against fixtures by default. Set TYPESAFE_API_KEY to run the
  * hierarchical requests against the live service (the flat baseline is always
- * replayed from `examples/recorded.ts` — see `search.ts`'s module doc for why
+ * replayed from `examples/classification/recorded.ts` — see `search.ts`'s module doc for why
  * re-requesting it would just repeat a request the other demo already made):
  *
  *   bun run examples/hierarchy/cli.ts
  */
 import { Console, Effect } from "effect"
-import { type Filing, filings } from "../filings.js"
-import { divisionOf, divisions, type GroupCode, groupName } from "../sic.js"
+import { type Filing, filings } from "../data/filings.js"
+import { divisionOf, divisions, type GroupCode, groupName } from "../data/sic.js"
 import { recordedModel } from "./recorded.js"
 import {
   beamPaths,
@@ -197,7 +197,7 @@ const report = (rows: ReadonlyArray<Row>) =>
         `${tokens} tokens · answered by ${rows[0]?.model ?? recordedModel}.`
     )
     yield* Console.log(
-      "The flat baseline cost nothing here — it is decoded from examples/recorded.ts, made for the other demo."
+      "The flat baseline cost nothing here — it is decoded from examples/classification/recorded.ts, made for the other demo."
     )
     yield* Console.log(
       "Re-scoring any of this — greedy, beam, or a different K — costs nothing either: the distributions are already in hand."

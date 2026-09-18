@@ -224,7 +224,7 @@ export interface Recording {
  * Rebuilds the raw JSON body for one stage of one query from a sparse
  * recording, filling in the zero-probability options a real response would
  * have included but that the recording omits for readability — the same
- * technique `examples/classification.ts`'s `respond` uses.
+ * technique `examples/classification/classification.ts`'s `respond` uses.
  *
  * Reused by both stages of the same query: the fine-grained stage's candidate
  * set depends on which window(s) `selectWindows` retains, which this

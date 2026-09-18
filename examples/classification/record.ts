@@ -4,15 +4,15 @@
  * The offline demo should show what the model actually did, not what someone
  * guessed it would do. Run this whenever the filings change:
  *
- *   TYPESAFE_API_KEY=... bun run examples/record.ts
+ *   TYPESAFE_API_KEY=... bun run examples/classification/record.ts
  *
  * It refuses to run without a key, so recorded fixtures can never be recorded
  * from fixtures.
  */
 import { Console, Effect } from "effect"
-import { SystemOne } from "../src/index.js"
+import { SystemOne } from "../../src/index.js"
+import { filings } from "../data/filings.js"
 import { clientLayer, industry, isLive } from "./classification.js"
-import { filings } from "./filings.js"
 
 const captured = Effect.gen(function*() {
   if (!(yield* isLive)) {
@@ -59,14 +59,14 @@ ${probabilities}
  *
  * Recorded ${new Date().toISOString().slice(0, 10)} from ${model}. Regenerate with:
  *
- *   TYPESAFE_API_KEY=... bun run examples/record.ts
+ *   TYPESAFE_API_KEY=... bun run examples/classification/record.ts
  *
  * Options the model gave zero weight are omitted; the live API returns the full
  * distribution across every option offered. A single recording is one draw from
  * a distribution, not a measurement — the same filing does not always come back
  * with the same confidence.
  */
-import type { GroupCode } from "./sic.js"
+import type { GroupCode } from "../data/sic.js"
 
 export interface Recorded {
   readonly probabilities: Partial<Record<GroupCode, number>>

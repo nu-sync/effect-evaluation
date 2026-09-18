@@ -4,12 +4,14 @@
 
 Two layers, at two different stages.
 
-**Layer 1 — `@nu-sync/effect-evaluation`, the System One client: built and working for the direct TypeSafe
-API, with OpenRouter support specified next.** Source in `src/`, tests in `test/`, four cookbook
-replications in `examples/`. 124 tests pass with no network access; typecheck, build, and package
+**Layer 1 — `@nu-sync/effect-evaluation`, the System One client: built and working for both TypeSafe's
+direct API and OpenRouter's Decisions endpoint.** Source in `src/`, tests in `test/`, four cookbook
+replications in `examples/`. 183 tests pass with no network access; typecheck, build, and package
 inspection pass. Its API is not yet stable, but it is real code rather than a proposal, and the rest
-of this document is written against what it revealed. The provider work described below is a plan,
-not a claim about the current implementation.
+of this document is written against what it revealed. OpenRouter's transport, provider selection, and
+error mapping are implemented and tested; the one part of Phase 0.1 not yet met is acceptance
+criterion 12 below — real OpenRouter golden fixtures, which require a live `OPENROUTER_API_KEY` and
+spend real credits, so `test/golden/` still holds only TypeSafe bytes.
 
 **Layer 2 — the evaluation framework: still a plan.** Datasets, targets, scorers, reports. Nothing
 in that section is implemented, and no signature there should be trusted until it is.
@@ -251,10 +253,11 @@ Both replicate TypeSafe's classification-by-confidence cookbook: one Choice ques
 SIC major group, reporting the narrow group when confidence clears 0.9 and the parent division — a
 local lookup, no second call — when it does not. Both run on fixtures by default and against the
 live API when `TYPESAFE_API_KEY` is set, with no change to the program; only the layer differs. The
-shared policy lives in `examples/classification.ts`, so the CLI and the server cannot drift.
+shared policy lives in `examples/classification/classification.ts`, so the CLI and the server cannot
+drift.
 
-`examples/classification-using-confidence.ts` prints both policies over the same answers, and states
-plainly that seven synthetic cases measure nothing.
+`examples/classification/cli.ts` prints both policies over the same answers, and states plainly that
+seven synthetic cases measure nothing.
 
 `examples/web/` serves the same thing with a slider and a live view. An Effect router becomes a
 `fetch` handler via `HttpRouter.toWebHandler` and is handed to `Bun.serve`; `GET /api/stream` is a
@@ -268,10 +271,11 @@ job — so dragging the slider re-derives every label with no request and no spe
 accuracy tallies visibly trade against each other. A typed failure reaches the page with its `_tag`
 intact.
 
-Offline answers are replayed from responses recorded from the live model by `examples/record.ts`,
-which refuses to run without a key. The earlier draft of this example shipped hand-written
-confidences, and the live run showed them to be wrong by 0.2–0.5 — a small, concrete instance of the
-calibration argument below: assumptions about a model's confidence are not evidence about it.
+Offline answers are replayed from responses recorded from the live model by
+`examples/classification/record.ts`, which refuses to run without a key. The earlier draft of this
+example shipped hand-written confidences, and the live run showed them to be wrong by 0.2–0.5 — a
+small, concrete instance of the calibration argument below: assumptions about a model's confidence
+are not evidence about it.
 
 This is also the first thing the spec had no answer for: what a developer *looks at*. The threshold
 slider is the small version of the argument in layer 2 that a report needs a local developer loop,
@@ -456,9 +460,12 @@ means.
 layers, opt-in retries, deterministic test layers, CLI and web cookbook examples, Bun build and
 tests.
 
-**Phase 0.1 — dual-provider System One transport. Planned.** Add explicit and automatic provider
-selection, the OpenRouter Decisions transport, provider-specific defaults and validation, complete
-status mapping, and separate golden response evidence while preserving one shared typed service.
+**Phase 0.1 — dual-provider System One transport. Implemented, except golden evidence.** Explicit and
+automatic provider selection, the OpenRouter Decisions transport, provider-specific defaults and
+validation, and complete status mapping are built and tested, preserving one shared typed service.
+Separate golden response evidence for OpenRouter is not: `test/golden/record-openrouter.ts` is
+written and ready but has never been run, since it requires a live `OPENROUTER_API_KEY` and spends
+real credits — that is the repo owner's call, not something built silently into a release.
 
 **Phase 1 — core evaluation contract.** Dataset with fingerprinting and sampling; target with
 trajectory-carrying `CaseResult`; scorer with the distributional score algebra; report with `n` and
@@ -490,6 +497,8 @@ exists; (9) request validation accounts for the documented differences without m
 (10) all documented statuses in the provider error table map to the promised typed, transient or
 terminal failure; (11) retries remain opt-in and never switch providers; and (12) committed golden
 responses independently prove the response shape of both providers without network access.
+(7)-(11) are met. (12) is not: `test/golden/` still holds only TypeSafe bytes, and the OpenRouter
+recorder awaits a live key.
 
 Phase 1 is met when, additionally:
 

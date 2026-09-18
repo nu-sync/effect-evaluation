@@ -4,14 +4,14 @@
  *
  * Recorded 2026-09-17 from jev-1.13.0. Regenerate with:
  *
- *   TYPESAFE_API_KEY=... bun run examples/record.ts
+ *   TYPESAFE_API_KEY=... bun run examples/classification/record.ts
  *
  * Options the model gave zero weight are omitted; the live API returns the full
  * distribution across every option offered. A single recording is one draw from
  * a distribution, not a measurement — the same filing does not always come back
  * with the same confidence.
  */
-import type { GroupCode } from "./sic.js"
+import type { GroupCode } from "../data/sic.js"
 
 export interface Recorded {
   readonly probabilities: Partial<Record<GroupCode, number>>

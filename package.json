@@ -1,6 +1,6 @@
 {
   "name": "@nu-sync/effect-evaluation",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Effect-native client for TypeSafe AI System One models (Jev): typed questions, probabilistic answers, typed failures.",
   "repository": {
     "type": "git",
@@ -54,7 +54,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "build": "rm -rf dist && bun build src/*.ts --outdir dist --target node --format esm --no-bundle && tsc -p tsconfig.build.json",
-    "example": "bun run examples/classification-using-confidence.ts",
+    "example": "bun run examples/classification/cli.ts",
     "check": "bun run typecheck && bun test && bun run build",
     "web": "bun run examples/web/server.ts",
     "prepublishOnly": "bun run check"

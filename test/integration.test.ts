@@ -18,8 +18,11 @@ import { isTransient } from "../src/Errors.js"
 import * as Question from "../src/Question.js"
 import * as SystemOne from "../src/SystemOne.js"
 import * as Testing from "../src/Testing.js"
-import { offlineLayer as classificationOfflineLayer, read as readFiling } from "../examples/classification.js"
-import { filings } from "../examples/filings.js"
+import {
+  offlineLayer as classificationOfflineLayer,
+  read as readFiling
+} from "../examples/classification/classification.js"
+import { filings } from "../examples/data/filings.js"
 import { offlineLayer as guardrailsOfflineLayer, screen } from "../examples/guardrails/policy.js"
 import { messages } from "../examples/guardrails/messages.js"
 import { recorded as guardrailsRecorded, recordedModel as guardrailsModel } from "../examples/guardrails/recorded.js"

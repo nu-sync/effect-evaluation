@@ -8,9 +8,9 @@
  * spending another token.
  */
 import { Config, Effect, Layer, Option, Redacted } from "effect"
-import { Question, ResponseError, SystemOne, Testing } from "../src/index.js"
+import { Question, ResponseError, SystemOne, Testing } from "../../src/index.js"
+import { divisionName, divisionOf, type GroupCode, groupCodes, groupName } from "../data/sic.js"
 import { recorded, recordedModel } from "./recorded.js"
-import { divisionName, divisionOf, type GroupCode, groupCodes, groupName } from "./sic.js"
 
 /** Report the narrow group at or above this confidence, the division below it. */
 export const defaultThreshold = 0.9

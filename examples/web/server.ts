@@ -19,14 +19,14 @@
 import { Effect, Layer, Ref, Stream } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { SystemOne } from "../../src/index.js"
-import { defaultThreshold, isLive, read } from "../classification.js"
-import { filings } from "../filings.js"
+import { defaultThreshold, isLive, read } from "../classification/classification.js"
+import { recordedModel } from "../classification/recorded.js"
+import { filings } from "../data/filings.js"
+import { divisions, groups } from "../data/sic.js"
 import { messages } from "../guardrails/messages.js"
 import { questions as guardrailQuestions, screen } from "../guardrails/policy.js"
 import { recordedModel as guardrailModel } from "../guardrails/recorded.js"
 import { policies } from "../guardrails/route.js"
-import { recordedModel } from "../recorded.js"
-import { divisions, groups } from "../sic.js"
 import { clientLayer } from "./client.js"
 
 /** How many requests are allowed in flight at once. Visible in both UIs. */

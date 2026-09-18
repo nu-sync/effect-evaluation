@@ -22,7 +22,7 @@ just cli             # classification demo in the terminal
 just cli-guardrails  # guardrails demo in the terminal
 just cli-find        # semantic-find demo in the terminal
 just cli-hierarchy   # hierarchy demo (flat vs greedy vs beam) in the terminal
-just record          # lists the five recorders and what each costs — spends nothing itself
+just record          # lists the six recorders and what each costs — spends nothing itself
 just record-find     # one recorder; each is separate because together they are ~60 live requests
 ```
 
@@ -60,6 +60,11 @@ Module roles, and the dependency direction between them:
   is what makes `answers.x.choice` narrow. Also holds `validate`, the pre-flight check.
 - `Answer.ts` — answer types, `Schema` decoders for the wire body, and `AnswersFor<Q>`, the type-level
   map from a question set to its answer set.
+- `Provider.ts` — the seam between the one shared service and the two APIs it can be configured
+  against: the provider table (base URL, path, default model, accepted env vars), credential
+  resolution and its selection order, URL building, and OpenRouter's provider-specific pre-flight
+  checks. Depends only on `Question.ts`'s types and `Errors.ts`'s `MissingCredentialsError`; only
+  `SystemOne.ts` imports it.
 - `SystemOne.ts` — the service, its layers, `evaluate`, `decode`/`reconcile`, and `retryTransient`.
 - `Errors.ts` — tagged failures, plus `isTransient`.
 - `Testing.ts` — deterministic layers.
@@ -104,7 +109,7 @@ non-null assertions after `Object.keys` lookups. Conditionally omit optional pro
 
 ## Examples, fixtures, and live keys
 
-Without an API key **nothing reaches TypeSafe**. `examples/classification.ts` exposes `isLive`
+Without an API key **nothing reaches TypeSafe**. `examples/classification/classification.ts` exposes `isLive`
 (a blank `TYPESAFE_API_KEY=` counts as *absent*, so an untouched `.env` stays on replay rather than
 sending an empty bearer token), and `clientLayer` picks `SystemOne.layerFetch()` or a replay layer
 from it. Each demo's `recorded.ts` holds real responses from `jev-1.13.0`, keyed by case id; a state

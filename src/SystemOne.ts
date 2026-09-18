@@ -8,13 +8,14 @@
  *
  * @since 0.1.0
  */
-import { Config, Context, Duration, Effect, Function, Layer, Redacted, Schedule, Schema } from "effect"
+import { Context, Duration, Effect, Function, Layer, Redacted, Schedule, Schema } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import * as Answer from "./Answer.js"
 import {
   AuthError,
   EncodeError,
   isTransient,
+  type MissingCredentialsError,
   OverloadedError,
   RateLimitError,
   RequestError,
@@ -22,6 +23,7 @@ import {
   type SystemOneError,
   TransportError
 } from "./Errors.js"
+import * as Provider from "./Provider.js"
 import * as Question from "./Question.js"
 
 /**
@@ -33,18 +35,30 @@ import * as Question from "./Question.js"
 export type { SystemOneError } from "./Errors.js"
 
 /**
- * The default model identifier.
+ * Re-exported so callers can name a provider without importing `Provider.ts`
+ * directly.
  *
  * @since 0.1.0
  */
-export const defaultModel = "jev-latest"
+export type { Provider } from "./Provider.js"
 
 /**
- * The default API base URL.
+ * The default model identifier (TypeSafe's). Sourced from
+ * {@link Provider.providers}`.typesafe` so this value and the provider table
+ * can't drift apart.
  *
  * @since 0.1.0
  */
-export const defaultBaseUrl = "https://api.typesafe.ai/v1"
+export const defaultModel = Provider.defaultModel
+
+/**
+ * The default API base URL (TypeSafe's). Sourced from
+ * {@link Provider.providers}`.typesafe` so this value and the provider table
+ * can't drift apart.
+ *
+ * @since 0.1.0
+ */
+export const defaultBaseUrl = Provider.defaultBaseUrl
 
 /**
  * One System One request: a shared state, and the questions to ask about it.
@@ -117,9 +131,11 @@ export class SystemOne extends Context.Service<SystemOne, Service>()("@nu-sync/e
  */
 export interface Options {
   readonly apiKey: Redacted.Redacted<string>
-  /** Defaults to {@link defaultModel}. */
+  /** Defaults to `"typesafe"`, so an existing call with no `provider` keeps behaving exactly as before. */
+  readonly provider?: Provider.Provider | undefined
+  /** Defaults to the selected provider's default model. */
   readonly model?: string | undefined
-  /** Defaults to {@link defaultBaseUrl}. */
+  /** Defaults to the selected provider's base URL. */
   readonly baseUrl?: string | undefined
 }
 
@@ -284,6 +300,15 @@ export const decode = <const Q extends Question.Questions>(
     Effect.flatMap((decoded) => reconcile(questions, decoded, json))
   )
 
+// Six of the documented terminal statuses (400, 402, 403, 404, 413 for
+// OpenRouter; 422 for TypeSafe) all become the same shape of failure: a
+// terminal `RequestError` carrying the real status and body. One closure,
+// reused across every numeric key below, keeps the mapping table
+// provider-neutral instead of five near-duplicate copies of the same branch.
+const terminalRequestError = (r: HttpClientResponse.HttpClientResponse) =>
+  Effect.flatMap(bodyText(r), (body) =>
+    Effect.fail(new RequestError({ reason: `the service rejected the request (${r.status})`, body, status: r.status })))
+
 const handleResponse = <const Q extends Question.Questions>(
   questions: Q,
   response: HttpClientResponse.HttpClientResponse
@@ -294,11 +319,14 @@ const handleResponse = <const Q extends Question.Questions>(
         Effect.mapError((cause) => new ResponseError({ reason: "response body was not JSON", cause })),
         Effect.flatMap((json) => decode(questions, json))
       ),
+    400: terminalRequestError,
     401: (r: HttpClientResponse.HttpClientResponse) =>
       Effect.flatMap(bodyText(r), (body) => Effect.fail(new AuthError({ body }))),
-    422: (r: HttpClientResponse.HttpClientResponse) =>
-      Effect.flatMap(bodyText(r), (body) =>
-        Effect.fail(new RequestError({ reason: "the service rejected the request (422)", body }))),
+    402: terminalRequestError,
+    403: terminalRequestError,
+    404: terminalRequestError,
+    413: terminalRequestError,
+    422: terminalRequestError,
     429: (r: HttpClientResponse.HttpClientResponse) =>
       Effect.flatMap(bodyText(r), (body) =>
         Effect.fail(new RateLimitError({ retryAfterSeconds: parseRetryAfter(r.headers), body }))),
@@ -317,9 +345,9 @@ const handleResponse = <const Q extends Question.Questions>(
 export const make = (options: Options): Effect.Effect<Service, never, HttpClient.HttpClient> =>
   Effect.gen(function*() {
     const client = yield* HttpClient.HttpClient
-    const baseUrl = options.baseUrl ?? defaultBaseUrl
-    const configuredModel = options.model ?? defaultModel
-    const url = `${baseUrl.replace(/\/+$/, "")}/systemone`
+    const provider = options.provider ?? "typesafe"
+    const configuredModel = options.model ?? Provider.providers[provider].defaultModel
+    const url = Provider.buildUrl(provider, options.baseUrl)
 
     const evaluate = <const Q extends Question.Questions>(
       request: EvaluateRequest<Q>
@@ -329,6 +357,10 @@ export const make = (options: Options): Effect.Effect<Service, never, HttpClient
         const invalid = Question.validate(request.questions)
         if (invalid !== undefined) {
           return yield* Effect.fail(new RequestError({ reason: invalid }))
+        }
+        const incompatible = Provider.preflight(provider, { state: request.state, questions: request.questions })
+        if (incompatible !== undefined) {
+          return yield* Effect.fail(new RequestError({ reason: incompatible }))
         }
         const httpRequest = yield* HttpClientRequest.post(url).pipe(
           HttpClientRequest.bearerToken(Redacted.value(options.apiKey)),
@@ -366,24 +398,39 @@ export const layer = (options: Options): Layer.Layer<SystemOne, never, HttpClien
   Layer.effect(SystemOne)(make(options))
 
 /**
- * A layer reading the API key from configuration.
+ * A layer reading the API key from configuration, selecting a provider
+ * either explicitly or automatically.
  *
- * Reads `TYPESAFE_API_KEY`, falling back to `TYPESAFE_AI_API_KEY` — the
- * official JavaScript SDK uses the first name and the AI SDK provider uses the
- * second, and being strict about which one is set helps nobody.
+ * With `options.provider` given, only that provider's environment
+ * variable(s) are read, and the layer fails with {@link MissingCredentialsError}
+ * naming just that provider's variable(s) if none is set — it never falls
+ * back to another provider's key.
+ *
+ * With no `options.provider`, the automatic order from SPEC.md applies: a
+ * non-blank `TYPESAFE_API_KEY`, then a non-blank `TYPESAFE_AI_API_KEY` — the
+ * official JavaScript SDK uses the first name and the AI SDK provider uses
+ * the second, and being strict about which one is set helps nobody — and
+ * finally a non-blank `OPENROUTER_API_KEY`. The layer fails naming all three
+ * variables if none is set.
+ *
+ * This selection happens once, when the layer is built, never per request —
+ * a rejected key or a rate limit is a typed request failure, not a reason to
+ * silently try the other provider.
  *
  * @since 0.1.0
  */
 export const layerConfig = (options?: {
+  readonly provider?: Provider.Provider | undefined
   readonly model?: string | undefined
   readonly baseUrl?: string | undefined
-}): Layer.Layer<SystemOne, Config.ConfigError, HttpClient.HttpClient> =>
+}): Layer.Layer<SystemOne, MissingCredentialsError, HttpClient.HttpClient> =>
   Layer.unwrap(
     Effect.map(
-      Config.Redacted("TYPESAFE_API_KEY").pipe(Config.orElse(() => Config.Redacted("TYPESAFE_AI_API_KEY"))),
-      (apiKey) =>
+      Provider.resolveCredentials(options?.provider),
+      ({ apiKey, provider }) =>
         layer({
           apiKey,
+          provider,
           model: options?.model,
           baseUrl: options?.baseUrl
         })
@@ -396,9 +443,10 @@ export const layerConfig = (options?: {
  * @since 0.1.0
  */
 export const layerFetch = (options?: {
+  readonly provider?: Provider.Provider | undefined
   readonly model?: string | undefined
   readonly baseUrl?: string | undefined
-}): Layer.Layer<SystemOne, Config.ConfigError> => Layer.provide(layerConfig(options), FetchHttpClient.layer)
+}): Layer.Layer<SystemOne, MissingCredentialsError> => Layer.provide(layerConfig(options), FetchHttpClient.layer)
 
 /**
  * Asks a set of questions about one state.

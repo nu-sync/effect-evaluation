@@ -18,6 +18,7 @@ import { Effect, Schema } from "effect"
 import * as Answer from "../src/Answer.js"
 import * as SystemOne from "../src/SystemOne.js"
 import { mixedQuestions, mixedState, plainQuestions, plainState } from "./golden/record.js"
+import { mixedQuestions as openrouterMixedQuestions, mixedState as openrouterMixedState } from "./golden/record-openrouter.js"
 
 const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect)
 
@@ -226,6 +227,78 @@ describe("response status and headers were captured alongside the body", () => {
     expect(Object.keys(meta.headers).every((k) => k === k.toLowerCase())).toBe(true)
     expect(meta.headers["content-type"]).toContain("application/json")
   })
+})
+
+// --- OpenRouter (SPEC.md's Phase 0.1, acceptance criterion 12) ------------
+//
+// `test/golden/record-openrouter.ts` writes `openrouter-mixed.json` /
+// `.meta.json` next to this file, but only when run directly with a live
+// `OPENROUTER_API_KEY` — which this repository does not have (see that
+// file's header). Fabricating a stand-in fixture here would defeat the
+// point: CLAUDE.md's "golden fixtures are the only check on the wire shape"
+// invariant means these bytes must come from a real response or not exist at
+// all. `test/openrouter-synthetic.test.ts` already covers what a hand-built
+// fixture can (decode-path wiring); it explicitly is not this.
+//
+// So: this block decodes the real fixture the same way the TypeSafe blocks
+// above do, but every test in it is skipped until that file is actually
+// committed. That keeps the promise in `record-openrouter.ts`'s docstring
+// ("a future test/golden.test.ts extension") true today rather than
+// aspirational — recording the fixture and committing it is the only step
+// left to satisfy criterion 12, no test code needs to change.
+const openrouterFixtureExists = await Bun.file(`${import.meta.dir}/golden/openrouter-mixed.json`).exists()
+
+describe("OpenRouter golden fixture (skipped until openrouter-mixed.json is recorded and committed)", () => {
+  test.skipIf(!openrouterFixtureExists)(
+    "openrouter-mixed.json: Answer.ResponseSchema decodes it, and matches the file literally",
+    async () => {
+      const { json } = await readGolden("openrouter-mixed")
+      const decoded = await run(Effect.mapError(decodeResponse(json), (e) => new Error(String(e))))
+
+      expect(decoded.model).toBe(json["model"] as string)
+      expect(Object.keys(decoded.answers).sort()).toEqual(["department", "severity", "urgent"])
+    }
+  )
+
+  test.skipIf(!openrouterFixtureExists)(
+    "openrouter-mixed.json reconciles against the exact questions that produced it",
+    async () => {
+      const { json } = await readGolden("openrouter-mixed")
+      const evaluation = await run(SystemOne.decode(openrouterMixedQuestions, json))
+
+      expect(openrouterMixedQuestions.department.criteria).toHaveProperty(evaluation.answers.department.choice)
+      expect(Object.keys(evaluation.answers.urgent)).toEqual(["type", "noul"])
+      // `body` is the verbatim wire object, so OpenRouter's documented
+      // extra top-level fields survive there even though `Answer.ResponseSchema`
+      // does not model them and they are absent from `raw`.
+      expect(evaluation.body).toBe(json)
+      expect(evaluation.body).toHaveProperty("id")
+      expect(evaluation.body).toHaveProperty("provider")
+      expect((evaluation.body as any).usage).toHaveProperty("cost")
+      expect(evaluation.raw).not.toHaveProperty("id")
+    }
+  )
+
+  test.skipIf(!openrouterFixtureExists)(
+    "openrouter-mixed.json's state and questions round-trip through the real service unchanged",
+    () => {
+      expect(openrouterMixedState.id).toBe("openrouter-golden-mixed")
+      expect(Object.keys(openrouterMixedQuestions).sort()).toEqual(["department", "severity", "urgent"])
+    }
+  )
+
+  if (!openrouterFixtureExists) {
+    test("acceptance criterion 12 is not yet met for OpenRouter", () => {
+      // Intentionally always passes: this is a visible marker, not a failure.
+      // `just record-openrouter` (requires OPENROUTER_API_KEY) records and
+      // commits `test/golden/openrouter-mixed.json` / `.meta.json`, which
+      // flips the three tests above on with no code change. Until then,
+      // OpenRouter's response shape is exercised only by
+      // `test/openrouter-synthetic.test.ts`'s hand-built fixture, which by
+      // its own header comment cannot prove the live wire shape.
+      expect(openrouterFixtureExists).toBe(false)
+    })
+  }
 })
 
 // A note for the next person editing this file: a golden fixture is one draw

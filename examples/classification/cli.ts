@@ -12,13 +12,13 @@
  * Runs offline against fixtures by default. Set TYPESAFE_API_KEY to run the
  * same code against the live service:
  *
- *   bun run examples/classification-using-confidence.ts
+ *   bun run examples/classification/cli.ts
  *
  * For the same policy with a slider on it, see `bun run web`.
  */
 import { Console, Effect } from "effect"
+import { type Filing, filings } from "../data/filings.js"
 import { clientLayer, decide, defaultThreshold, isCorrect, isLive, read } from "./classification.js"
-import { type Filing, filings } from "./filings.js"
 import { recordedModel } from "./recorded.js"
 
 interface Row {

@@ -8,7 +8,7 @@
  * with no further spend.
  */
 import { Question } from "../../src/index.js"
-import { divisionOf, divisions, type DivisionCode, type GroupCode, groupCodes, groupName } from "../sic.js"
+import { divisionOf, divisions, type DivisionCode, type GroupCode, groupCodes, groupName } from "../data/sic.js"
 
 /**
  * Every group code that belongs to one division, precomputed once so

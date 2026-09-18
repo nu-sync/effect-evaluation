@@ -17,16 +17,16 @@
  * the same response is not a shortcut on the algorithm; it is the batching
  * this cookbook is about, applied one level further.
  *
- * The flat baseline (`examples/classification.ts`'s single 60-option Choice)
- * costs nothing here: it is decoded from the recordings `examples/record.ts`
- * already made for the other demo, through the same production decoder,
- * with no request of its own.
+ * The flat baseline (`examples/classification/classification.ts`'s single
+ * 60-option Choice) costs nothing here: it is decoded from the recordings
+ * `examples/classification/record.ts` already made for the other demo,
+ * through the same production decoder, with no request of its own.
  */
 import { Config, Effect, Layer, Option, Redacted } from "effect"
 import { Answer, ResponseError, SystemOne, Testing } from "../../src/index.js"
-import { industry, respond as flatRespond } from "../classification.js"
-import type { Filing } from "../filings.js"
-import { divisionOf, type DivisionCode, divisions, type GroupCode, groupCodes, groupName } from "../sic.js"
+import { industry, respond as flatRespond } from "../classification/classification.js"
+import type { Filing } from "../data/filings.js"
+import { divisionOf, type DivisionCode, divisions, type GroupCode, groupCodes, groupName } from "../data/sic.js"
 import { recorded, recordedModel } from "./recorded.js"
 import {
   type CandidatePath,
@@ -60,7 +60,7 @@ export interface FilingReading {
 
 /**
  * The flat baseline: one 60-option `Choice`, decoded from the recording
- * `examples/record.ts` already made. No request — `SystemOne.decode` is the
+ * `examples/classification/record.ts` already made. No request — `SystemOne.decode` is the
  * same pure decoder the live client uses, just handed a stored body instead of
  * one fetched over HTTP.
  */
@@ -186,7 +186,7 @@ export const beamPaths = (
  * asking only `division` is the root request; a request whose every question
  * name starts with `group_` is a batched level-2 request, one entry per
  * retained division. Zero-fills `probabilities` the same way
- * `examples/classification.ts`'s `respond` does, over exactly the option set
+ * `examples/classification/classification.ts`'s `respond` does, over exactly the option set
  * the corresponding question offers — an omitted zero for an option outside
  * that division would fail `reconcile`'s coverage check for a different
  * reason than the one this fixture is standing in for.
@@ -250,7 +250,7 @@ export const respond = (state: { readonly id?: unknown }, questionNames: Readonl
  * Replays the recorded root and level-2 responses, keyed by filing id and
  * dispatched by which questions a request carries. A filing with no recording
  * fails as a genuine `ResponseError`, never an invented one — matching
- * `examples/classification.ts`'s `offlineLayer`.
+ * `examples/classification/classification.ts`'s `offlineLayer`.
  */
 export const offlineLayer = Testing.layer((request) => {
   const state = request.state as { readonly id?: unknown }
@@ -283,5 +283,5 @@ export const clientLayer = Layer.unwrap(
 )
 
 // Re-exported so callers of this module don't also need to import from
-// `../sic.js` just to print a code's human name.
+// `../data/sic.js` just to print a code's human name.
 export { divisionOf, groupCodes }
