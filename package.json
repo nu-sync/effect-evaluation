@@ -28,6 +28,10 @@
       "types": "./dist/Errors.d.ts",
       "import": "./dist/Errors.js"
     },
+    "./Provider": {
+      "types": "./dist/Provider.d.ts",
+      "import": "./dist/Provider.js"
+    },
     "./Question": {
       "types": "./dist/Question.d.ts",
       "import": "./dist/Question.js"

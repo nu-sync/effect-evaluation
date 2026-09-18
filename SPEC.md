@@ -83,6 +83,7 @@ result.answers.refund.noul              // probability; no confidence field exis
 @nu-sync/effect-evaluation/Answer     answer types, wire schemas
 @nu-sync/effect-evaluation/SystemOne  service, layers, evaluate, retryTransient
 @nu-sync/effect-evaluation/Errors     tagged failures
+@nu-sync/effect-evaluation/Provider   provider table, credential resolution, pre-flight checks
 @nu-sync/effect-evaluation/Testing    deterministic layers
 ```
 
