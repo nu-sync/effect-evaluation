@@ -4,10 +4,12 @@
 
 Two layers, at two different stages.
 
-**Layer 1 — `effect-evaluation`, the System One client: built and working.** Source in `src/`, tests
-in `test/`, four cookbook replications in `examples/`. 124 tests pass with no network access; typecheck,
-build, and package inspection pass. Its API is not yet stable, but it is real code rather than a
-proposal, and the rest of this document is written against what it revealed.
+**Layer 1 — `@nu-sync/effect-evaluation`, the System One client: built and working for the direct TypeSafe
+API, with OpenRouter support specified next.** Source in `src/`, tests in `test/`, four cookbook
+replications in `examples/`. 124 tests pass with no network access; typecheck, build, and package
+inspection pass. Its API is not yet stable, but it is real code rather than a proposal, and the rest
+of this document is written against what it revealed. The provider work described below is a plan,
+not a claim about the current implementation.
 
 **Layer 2 — the evaluation framework: still a plan.** Datasets, targets, scorers, reports. Nothing
 in that section is implemented, and no signature there should be trusted until it is.
@@ -44,12 +46,14 @@ variance.
 case. A trajectory — tool calls, steps, intermediate messages — has to be in the case result from
 the beginning or the core contract gets re-cut later.
 
-## Layer 1 — `effect-evaluation`
+## Layer 1 — `@nu-sync/effect-evaluation`
 
 ### What it is
 
-An Effect service for TypeSafe AI System One models. One request carries a `state` and a map of
-named questions; the response carries one typed answer per question plus token usage.
+An Effect service for TypeSafe AI System One models, reached either through TypeSafe's direct API or
+OpenRouter's Decisions API. One request carries a `state` and a map of named questions; the response
+carries one typed answer per question plus token usage. Provider selection belongs to the Layer, not
+to the question and answer model, so the program using `SystemOne.evaluate` is identical for both.
 
 ```ts
 const result = yield* SystemOne.evaluate({
@@ -72,22 +76,98 @@ result.answers.refund.noul              // probability; no confidence field exis
 ### Modules
 
 ```
-effect-evaluation            barrel
-effect-evaluation/Question   question builders and types
-effect-evaluation/Answer     answer types, wire schemas
-effect-evaluation/SystemOne  service, layers, evaluate, retryTransient
-effect-evaluation/Errors     tagged failures
-effect-evaluation/Testing    deterministic layers
+@nu-sync/effect-evaluation            barrel
+@nu-sync/effect-evaluation/Question   question builders and types
+@nu-sync/effect-evaluation/Answer     answer types, wire schemas
+@nu-sync/effect-evaluation/SystemOne  service, layers, evaluate, retryTransient
+@nu-sync/effect-evaluation/Errors     tagged failures
+@nu-sync/effect-evaluation/Testing    deterministic layers
 ```
 
 ### Decisions made while building it
 
-**Direct HTTP, not a wrapper.** The API is one endpoint, three question types, four documented
-error codes. Wrapping `@typesafe-ai/sdk` would have imported its internal retry behaviour, which
-collides with this package's rule that nothing retries silently. Wrapping `experimental_evaluate`
-would have imported an API that may change in patch releases. Both remain reasonable as *additional*
-entry points later — the AI SDK path in particular buys OpenAI, Anthropic, and Google judges behind
-the same question model, which layer 2 wants for judge comparison.
+**Direct HTTP, not a wrapper.** Each provider exposes one relevant endpoint over bearer-authenticated
+HTTP. Wrapping `@typesafe-ai/sdk` or `@openrouter/sdk` would make their transport and retry policies
+part of this package's behaviour, which collides with the rule that nothing retries silently.
+Wrapping `experimental_evaluate` would import an API that may change in patch releases. The client
+will therefore keep its Effect HTTP transport and put the endpoint, credentials, defaults, request
+validation and status mapping behind a small provider adapter. The provider adapters converge on the
+existing `Question`, `Answer`, decode and reconcile path; they do not duplicate it.
+
+### Providers, transport and configuration
+
+The two providers serve the same model family and share the core Decisions request and response
+shape, but they are different APIs. A base-URL substitution is insufficient because their endpoint
+paths, model identifiers, configuration keys and documented failures differ.
+
+| Provider | Endpoint | Default model | API key configuration |
+| --- | --- | --- | --- |
+| TypeSafe | `POST https://api.typesafe.ai/v1/systemone` | `jev-latest` | `TYPESAFE_API_KEY`, then `TYPESAFE_AI_API_KEY` |
+| OpenRouter | `POST https://openrouter.ai/api/alpha/decisions` | `typesafe/jev-1.13` | `OPENROUTER_API_KEY` |
+
+Provider selection is deterministic:
+
+1. A caller may explicitly select `typesafe` or `openrouter` in Layer configuration. An explicit
+   choice reads only that provider's credentials and fails configuration if they are absent; it does
+   not silently switch providers.
+2. With no provider selected, configuration tries TypeSafe first: a non-blank
+   `TYPESAFE_API_KEY`, then a non-blank `TYPESAFE_AI_API_KEY`.
+3. If neither TypeSafe key is available, configuration tries a non-blank `OPENROUTER_API_KEY`.
+4. If none is available, Layer construction fails with a configuration error that names all accepted
+   variables.
+
+This is startup configuration, not runtime failover. A rejected key, rate limit or provider outage
+must be returned as a typed failure; the client must never replay a paid request against the other
+provider automatically. If both providers are configured and no explicit choice is made, TypeSafe
+wins by the ordering above. The explicit `layer({ apiKey, ... })` form cannot infer which service
+issued an opaque key, so omitting its provider remains a backwards-compatible TypeSafe selection;
+callers using an OpenRouter key must name `openrouter`.
+
+Both transports send the provider-neutral `{ state, model, questions }` body and use bearer auth.
+OpenRouter's response adds fields such as request `id`, serving `provider`, and `usage.cost`; these
+remain available in `Evaluation.body` even when the common decoded view does not yet expose them.
+The implementation may later promote common provenance fields into `Evaluation`, but must not discard
+the verbatim body while doing so.
+
+The published schemas have small input differences that the provider adapter must reconcile without
+narrowing the shared public question types:
+
+- TypeSafe accepts the package's existing JSON state model. OpenRouter documents top-level `state`
+  as a string, object or array, excluding a top-level number, boolean or `null`.
+- The shared client permits either side of Noul `criteria` to be omitted. OpenRouter documents both
+  `true` and `false` as required when the `criteria` object is present.
+- The existing client deliberately enforces the stricter useful bounds of at least two Choice
+  options and 2–10 Score levels. Those checks remain common even where OpenRouter's generated schema
+  is looser.
+
+Provider-specific pre-flight checks should reject an incompatible request before transport, with a
+`RequestError` that explains the difference. They must not mutate, fill in or reinterpret the user's
+state or criteria to make one provider accept it.
+
+### Provider error mapping
+
+The public failure taxonomy remains provider-neutral, but every documented provider status must be
+mapped deliberately and retain its actual HTTP status and response body. “Terminal” means the same
+request should not be retried automatically; it does not imply that a user cannot fix credentials,
+credits or configuration and try again.
+
+| Status | Provider meaning | Client treatment |
+| --- | --- | --- |
+| `400` | OpenRouter malformed or invalid request | terminal `RequestError` |
+| `401` | either provider rejected or did not receive authentication | terminal `AuthError` |
+| `402` | OpenRouter has insufficient credits or quota | terminal `RequestError`, preserving the status and body |
+| `403` | OpenRouter authenticated the key but denied the operation | terminal `RequestError`, preserving the status and body |
+| `404` | OpenRouter resource, route or requested model was not found | terminal `RequestError`, preserving the status and body |
+| `413` | OpenRouter request payload is too large | terminal `RequestError`, preserving the status and body |
+| `422` | TypeSafe rejected a well-formed request | terminal `RequestError` |
+| `429` | either provider rate limited the request | transient `RateLimitError`, retaining `Retry-After` when present |
+| `500`, `502`, `503`, `524`, `529`, and other `5xx` | provider, upstream or edge failure/overload | transient `OverloadedError` with the actual status and body |
+| any other status | undocumented response | terminal `ResponseError`; do not guess |
+
+Local pre-flight failures remain `RequestError`s with no invented HTTP response. `RequestError` must
+therefore stop hard-coding `422` as if every rejection came from TypeSafe. Transport failures remain
+`TransportError`, JSON encoding failures remain `EncodeError`, and a successful HTTP response that
+cannot be decoded or reconciled remains `ResponseError`.
 
 **Typed answers are checked, not asserted.** The wire response decodes through `Schema`, and is then
 reconciled against the questions that were asked. A missing answer, an answer whose type does not
@@ -126,13 +206,14 @@ noul answers carry only the probability. Modelling that asymmetry honestly is th
 a client and a wrapper, and it constrains layer 2's score algebra (below).
 
 **Retries are opt-in.** `isTransient` classifies errors; `retryTransient` applies exponential
-backoff with jitter to transport errors, 429, and 5xx/529, and to nothing else. 401 and 422 are
-terminal by construction. Evaluation is a pure read, so retrying is safe — but a client that retries
-silently hides latency and spend, so it does not.
+backoff with jitter to transport errors, 429, and all 5xx responses, and to nothing else. Every
+documented 4xx response other than 429 is terminal by construction. Evaluation is a pure read, so
+retrying the selected provider is safe — but a client that silently retries hides both latency and
+spend, so it does not. A retry never switches providers.
 
-**Both env var names.** `layerConfig` reads `TYPESAFE_API_KEY` and falls back to
-`TYPESAFE_AI_API_KEY`; the official JavaScript SDK uses the first and the AI SDK provider uses the
-second. Being strict here would only generate support questions.
+**Configuration follows provider selection.** TypeSafe continues to accept both established env var
+names. OpenRouter uses `OPENROUTER_API_KEY`. The automatic TypeSafe-first ordering applies only when
+the provider is omitted; an explicit provider never falls through to another provider's key.
 
 **Tracing from the start, not phase 4.** Every request is wrapped in a `SystemOne.evaluate` span
 carrying the model and question count.
@@ -149,7 +230,7 @@ pre-flight validation, request shape (URL, bearer token, body), status mapping, 
 **Golden fixtures are what keep the rest of the suite honest.** Every other fixture in this repo is
 built by `Testing.response`, which constructs the envelope from this client's own assumptions about
 the wire shape — so a suite of them can only prove the client agrees with itself. `test/golden/`
-holds verbatim response bodies from real requests, with their status and headers, and
+currently holds verbatim TypeSafe response bodies from real requests, with their status and headers, and
 `test/golden.test.ts` pins the field names the client depends on against those bytes:
 `usage.input_tokens` / `output_tokens`, answers keyed by question name, a noul answer genuinely
 carrying no `confidence`, and a structured Score `legend` round-tripping as objects rather than
@@ -157,6 +238,12 @@ strings. Recording them found no discrepancy — the wire shape is what `src/` a
 result worth having rather than a formality, because until then nothing in the suite had seen a real
 response body. The golden tests assert shapes and key sets only, never particular probabilities, so
 re-recording is not a regression.
+
+OpenRouter support is not complete until equivalent golden evidence exists for that transport: at
+least one mixed Noul/Choice/Score response, a structured Score legend, and the OpenRouter-only
+top-level provenance and cost fields. Transport tests must independently pin each provider's URL,
+default model, credential source, explicit selection, automatic selection order, missing-key failure,
+and every status mapping listed above. No automated test may require a live or paid API call.
 
 ### The examples
 
@@ -210,11 +297,13 @@ reports plainly rather than hiding.
   bindings it never defines. The build is therefore transpile-only (`--no-bundle`), which is the
   better choice for a peer-dependency library anyway. Relative imports carry `.js` specifiers so
   Node's ESM resolver works.
-- `effect-evaluation` is unregistered on npm and free to claim; the tarball, the six subpath exports,
+- `@nu-sync/effect-evaluation` is unregistered on npm and free to claim; the tarball, the six subpath exports,
   and `node16`/`nodenext` type resolution were checked against real build output.
-- No streaming and no batching, because the API has neither.
-- The API documents no temperature, seed, or idempotency key. Repeated trials are repeated requests,
-  and this client cannot make them reproducible.
+- No streaming and no batching, because neither Decisions API offers them for this use case.
+- OpenRouter's Decisions endpoint is explicitly alpha, so its adapter and golden fixtures are the
+  compatibility boundary if that route or envelope changes.
+- Neither API documents temperature, seed, or an idempotency key for Decisions. Repeated trials are
+  repeated requests, and this client cannot make them reproducible.
 
 ## Layer 2 — the evaluation framework
 
@@ -363,8 +452,13 @@ means.
 
 ## Phases
 
-**Phase 0 — System One client. Done.** Typed questions and answers, tagged failures, layers, opt-in
-retries, deterministic test layers, CLI and web cookbook examples, Bun build and tests.
+**Phase 0 — direct TypeSafe System One client. Done.** Typed questions and answers, tagged failures,
+layers, opt-in retries, deterministic test layers, CLI and web cookbook examples, Bun build and
+tests.
+
+**Phase 0.1 — dual-provider System One transport. Planned.** Add explicit and automatic provider
+selection, the OpenRouter Decisions transport, provider-specific defaults and validation, complete
+status mapping, and separate golden response evidence while preserving one shared typed service.
 
 **Phase 1 — core evaluation contract.** Dataset with fingerprinting and sampling; target with
 trajectory-carrying `CaseResult`; scorer with the distributional score algebra; report with `n` and
@@ -389,16 +483,24 @@ transient failures are distinguishable from terminal ones; (4) tests cover decod
 transport status handling, and retry policy with no API key; (5) the cookbook example runs offline
 and live from the same program; (6) `bun test`, typecheck, build, and package inspection pass.
 
+Phase 0.1 is met when: (7) the same `SystemOne.evaluate` program can run through either TypeSafe or
+OpenRouter by changing only its Layer; (8) explicit provider selection never falls back, while an
+omitted provider selects a configured TypeSafe key before OpenRouter and fails clearly when neither
+exists; (9) request validation accounts for the documented differences without mutating input;
+(10) all documented statuses in the provider error table map to the promised typed, transient or
+terminal failure; (11) retries remain opt-in and never switch providers; and (12) committed golden
+responses independently prove the response shape of both providers without network access.
+
 Phase 1 is met when, additionally:
 
-7. A dataset, an Effect target, and a deterministic scorer produce a report in a short example.
-8. A report retains raw case evidence including trajectory, and typed failures.
-9. Execution can be rescored without rerunning the target, and refuses to rescore across a changed
+13. A dataset, an Effect target, and a deterministic scorer produce a report in a short example.
+14. A report retains raw case evidence including trajectory, and typed failures.
+15. Execution can be rescored without rerunning the target, and refuses to rescore across a changed
    dataset fingerprint.
-10. Concurrency, interruption, failure mode, and spend ceilings are tested deterministically.
-11. Every emitted summary carries `n` and a standard error, and two runs produce a paired comparison.
-12. A judge scorer can be calibrated against a labeled subset, and the report shows its agreement.
-13. Documentation nowhere implies that model confidence proves task success.
+16. Concurrency, interruption, failure mode, and spend ceilings are tested deterministically.
+17. Every emitted summary carries `n` and a standard error, and two runs produce a paired comparison.
+18. A judge scorer can be calibrated against a labeled subset, and the report shows its agreement.
+19. Documentation nowhere implies that model confidence proves task success.
 
 ## Open decisions
 
@@ -407,9 +509,9 @@ peer dependency; Effect v4 rc with TypeScript 5.9+; JSONL as the first sink; tra
 
 **Reopened and decided the other way: one package, not two.** This document previously recorded
 "TypeSafe in core (no — its own package, with the AI SDK adapter as a sibling)", and layer 1 was
-built and published under that assumption. It now ships as `effect-evaluation`, so layer 2 grows
+built and published under that assumption. It now ships as `@nu-sync/effect-evaluation`, so layer 2 grows
 inside the same package rather than beside it. The honest cost of that is worth stating: someone
-installing `effect-evaluation` today gets a TypeSafe System One client and no evaluation framework,
+installing `@nu-sync/effect-evaluation` today gets a TypeSafe System One client and no evaluation framework,
 and the name will only describe its contents once phase 1 lands. The benefit is one name, one
 version, and no cross-package contract to keep in step while the core types are still moving.
 
@@ -438,6 +540,14 @@ Checked against primary sources, September 2026.
   [choice](https://docs.typesafe.ai/primitives/choice),
   [score](https://docs.typesafe.ai/primitives/score),
   [confidence](https://docs.typesafe.ai/confidence)
+- OpenRouter exposes Jev through the alpha Decisions endpoint at
+  `POST https://openrouter.ai/api/alpha/decisions`, using the model id `typesafe/jev-1.13` and an
+  OpenRouter bearer key. Its response shares the Decisions answer and token-usage envelope while
+  adding provider/request provenance and optional cost. Documented failures are 400 / 401 / 402 /
+  403 / 404 / 413 / 429 / 500 / 502 / 503 / 524 / 529, plus a default error response for other
+  4xx/5xx statuses.
+  [Decisions API](https://openrouter.ai/docs/api/api-reference/alphadecisions/submit-a-decisions-questions-and-answers-request),
+  [Jev 1.13](https://openrouter.ai/typesafe/jev-1.13/)
 - Official SDKs exist for JavaScript and Python; the AI SDK provider is `@ai-sdk/typesafe-ai`, used
   through `experimental_evaluate`, which is explicitly experimental.
   [JS SDK](https://docs.typesafe.ai/sdk/javascript),
